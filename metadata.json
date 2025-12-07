@@ -1,0 +1,5 @@
+{
+  "name": "TempoLoop",
+  "description": "A professional-grade audio practice tool featuring variable speed playback, pitch shifting, and precise A/B looping capabilities for musicians and transcribers.",
+  "requestFramePermissions": []
+}

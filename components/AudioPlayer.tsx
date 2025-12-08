@@ -317,6 +317,64 @@ export const AudioPlayer: React.FC = () => {
     }
   };
 
+  // Keyboard Shortcuts Handler
+  // Use refs to access latest closure values inside event listener
+  const handlersRef = useRef({ togglePlay, setLoopA, setLoopB });
+  handlersRef.current = { togglePlay, setLoopA, setLoopB };
+  
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      const key = e.key.toLowerCase();
+      
+      switch (key) {
+        case ' ':
+          e.preventDefault();
+          handlersRef.current.togglePlay();
+          break;
+        case 'r':
+          if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+            // Immediate UI update
+            setState(s => ({ ...s, currentTime: 0 }));
+          }
+          break;
+        case 'arrowleft':
+          if (audioRef.current) {
+             const newTime = Math.max(0, audioRef.current.currentTime - 5);
+             audioRef.current.currentTime = newTime;
+             setState(s => ({ ...s, currentTime: newTime }));
+          }
+          break;
+        case 'arrowright':
+          if (audioRef.current) {
+             const duration = stateRef.current.duration || Infinity;
+             const newTime = Math.min(duration, audioRef.current.currentTime + 5);
+             audioRef.current.currentTime = newTime;
+             setState(s => ({ ...s, currentTime: newTime }));
+          }
+          break;
+        case 'l':
+          setLoop(l => ({ ...l, active: !l.active }));
+          break;
+        case '[':
+          handlersRef.current.setLoopA();
+          break;
+        case ']':
+          handlersRef.current.setLoopB();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       
@@ -501,6 +559,16 @@ export const AudioPlayer: React.FC = () => {
                     </div>
                     <p className="text-[10px] text-amber-500/50">Changes key. Speed is preserved.</p>
                 </div>
+            </div>
+            
+            {/* Shortcuts Help */}
+            <div className="text-[10px] text-slate-600 flex flex-wrap justify-center gap-4 border-t border-slate-800 pt-4">
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">Space</kbd> Play/Pause</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">R</kbd> Reset</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">←</kbd> <kbd className="bg-slate-800 px-1 rounded text-slate-400">→</kbd> Seek 5s</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">[</kbd> Loop A</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">]</kbd> Loop B</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">L</kbd> Toggle Loop</span>
             </div>
         </div>
       </div>

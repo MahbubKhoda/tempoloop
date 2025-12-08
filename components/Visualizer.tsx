@@ -9,7 +9,7 @@ interface VisualizerProps {
 const Visualizer: React.FC<VisualizerProps> = ({ audioContext, sourceNode, isPlaying }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!audioContext || !sourceNode) return;
@@ -46,7 +46,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ audioContext, sourceNode, isPla
 // Re-implementing with AnalyserNode prop for cleaner separation
 export const AudioScope: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rAF = useRef<number>();
+  const rAF = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;

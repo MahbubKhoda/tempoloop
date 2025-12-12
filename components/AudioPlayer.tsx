@@ -330,6 +330,40 @@ export const AudioPlayer: React.FC = () => {
       // Ignore if user is typing in an input field
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
+      // Speed Control: Ctrl + (=/+) or Ctrl + -
+      if (e.ctrlKey) {
+        if (e.key === '=' || e.key === '+') {
+            e.preventDefault();
+            setState(s => ({ 
+                ...s, 
+                playbackRate: Math.min(2.0, parseFloat((s.playbackRate + 0.05).toFixed(2))) 
+            }));
+            return;
+        }
+        if (e.key === '-') {
+            e.preventDefault();
+            setState(s => ({ 
+                ...s, 
+                playbackRate: Math.max(0.25, parseFloat((s.playbackRate - 0.05).toFixed(2))) 
+            }));
+            return;
+        }
+      }
+
+      // Pitch Control: Shift + (+/=) or Shift + (-/_)
+      if (e.shiftKey) {
+        if (e.key === '+' || e.key === '=') {
+           e.preventDefault();
+           setState(s => ({ ...s, pitchShift: Math.min(12, s.pitchShift + 1) }));
+           return;
+        }
+        if (e.key === '_' || e.key === '-') {
+           e.preventDefault();
+           setState(s => ({ ...s, pitchShift: Math.max(-12, s.pitchShift - 1) }));
+           return;
+        }
+      }
+
       const key = e.key.toLowerCase();
       
       switch (key) {
@@ -569,6 +603,8 @@ export const AudioPlayer: React.FC = () => {
                 <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">[</kbd> Loop A</span>
                 <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">]</kbd> Loop B</span>
                 <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">L</kbd> Toggle Loop</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">Ctrl</kbd> <kbd className="bg-slate-800 px-1 rounded text-slate-400">+/-</kbd> Speed</span>
+                <span><kbd className="bg-slate-800 px-1 rounded text-slate-400">Shift</kbd> <kbd className="bg-slate-800 px-1 rounded text-slate-400">+/-</kbd> Pitch</span>
             </div>
         </div>
       </div>

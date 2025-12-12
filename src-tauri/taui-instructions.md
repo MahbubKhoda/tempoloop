@@ -455,3 +455,52 @@ Now you can generate your `.exe` simply by using Git tags.
   * **Workflow Permissions:** If the Action fails with "Resource not accessible", go to your repo **Settings \> Actions \> General**, scroll to **Workflow permissions**, and select **"Read and write permissions"**.
   * **Bundle Identifier:** If the build fails, verify that `identifier` in `tauri.conf.json` is unique (e.g., `"com.myname.myapp"`).
 
+---
+
+# ### App Icons
+
+Tauri ships with a default iconset based on its logo. This is NOT what you want when you ship your application. To remedy this common situation, Tauri provides the `icon` command that will take an input file (`./app-icon.png` by default) and create all the icons needed for the various platforms.
+
+**NPM Command:**
+```bash
+npm run tauri icon
+```
+
+ref: https://v2.tauri.app/develop/icons/
+
+```
+> pnpm tauri icon --help
+
+Generate various icons for all major platforms
+
+Usage: pnpm run tauri icon [OPTIONS] [INPUT]
+
+Arguments:
+  [INPUT]  Path to the source icon (squared PNG or SVG file with transparency) [default: ./app-icon.png]
+
+Options:
+  -o, --output <OUTPUT>        Output directory. Default: 'icons' directory next to the tauri.conf.json file
+  -v, --verbose...             Enables verbose logging
+  -p, --png <PNG>              Custom PNG icon sizes to generate. When set, the default icons are not generated
+      --ios-color <IOS_COLOR>  The background color of the iOS icon - string as defined in the W3C's CSS Color Module Level 4 <https://www.w3.org/TR/css-color-4/> [default: #fff]
+  -h, --help                   Print help
+  -V, --version                Print version
+```
+
+The desktop icons will be placed in your src-tauri/icons folder by default, where they will be included in your built app automatically. If you want to source your icons from a different location, you can edit this part of the tauri.conf.json file:
+
+```json
+{
+  "bundle": {
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
+```
+
+The mobile icons will be placed into the Xcode and Android Studio projects directly!

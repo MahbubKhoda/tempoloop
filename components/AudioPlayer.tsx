@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, Music, AlertCircle } from 'lucide-react';
 import { LoopRegion, AudioState, AudioMetadata } from '../types';
 import { formatTime, formatTimePrecise } from '../utils/format';
@@ -99,6 +99,7 @@ registerProcessor('pitch-shifter', PitchShifterProcessor);
 export const AudioPlayer: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
   
   // Audio Graph Refs
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
@@ -126,6 +127,9 @@ export const AudioPlayer: React.FC = () => {
     end: null,
     active: false,
   });
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoverInfo, setHoverInfo] = useState<{ left: number; time: number } | null>(null);
 
   // Initialize Audio Context and Worklet
   const initAudio = async () => {
@@ -226,7 +230,11 @@ export const AudioPlayer: React.FC = () => {
 
     const handleTimeUpdate = () => {
       const current = audio.currentTime;
-      setState(s => ({ ...s, currentTime: current }));
+      
+      // Only update UI state if not dragging
+      if (!isDragging) {
+        setState(s => ({ ...s, currentTime: current }));
+      }
 
       // Loop Logic
       if (loop.active && loop.start !== null && loop.end !== null) {
@@ -255,7 +263,7 @@ export const AudioPlayer: React.FC = () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [loop]);
+  }, [loop, isDragging]);
 
   // Apply Speed and Pitch Changes
   useEffect(() => {
@@ -309,16 +317,58 @@ export const AudioPlayer: React.FC = () => {
     setLoop(l => ({ ...l, end: clamped }));
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setState(s => ({ ...s, currentTime: time }));
-    }
+  // --- Mouse / Drag Handlers for Progress Bar ---
+
+  const getSeekTime = (clientX: number) => {
+      if (!progressBarRef.current || !audioRef.current) return 0;
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+      const percentage = x / rect.width;
+      const duration = audioRef.current.duration || 0;
+      return percentage * duration;
   };
 
-  // Keyboard Shortcuts Handler
-  // Use refs to access latest closure values inside event listener
+  const handleProgressMouseDown = (e: React.MouseEvent) => {
+      if (!audioRef.current) return;
+      setIsDragging(true);
+      
+      const newTime = getSeekTime(e.clientX);
+      audioRef.current.currentTime = newTime;
+      setState(s => ({ ...s, currentTime: newTime }));
+
+      const handleWindowMouseMove = (ev: MouseEvent) => {
+          if (!audioRef.current) return;
+          ev.preventDefault();
+          const time = getSeekTime(ev.clientX);
+          audioRef.current.currentTime = time;
+          setState(s => ({ ...s, currentTime: time }));
+      };
+
+      const handleWindowMouseUp = () => {
+          setIsDragging(false);
+          window.removeEventListener('mousemove', handleWindowMouseMove);
+          window.removeEventListener('mouseup', handleWindowMouseUp);
+      };
+
+      window.addEventListener('mousemove', handleWindowMouseMove);
+      window.addEventListener('mouseup', handleWindowMouseUp);
+  };
+
+  const handleProgressMouseMove = (e: React.MouseEvent) => {
+      if (!progressBarRef.current || !state.duration) return;
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(x / rect.width, 1));
+      const time = percentage * state.duration;
+      setHoverInfo({ left: x, time });
+  };
+
+  const handleProgressMouseLeave = () => {
+      setHoverInfo(null);
+  };
+
+  // --- Keyboard Shortcuts Handler ---
+
   const handlersRef = useRef({ togglePlay, setLoopA, setLoopB });
   handlersRef.current = { togglePlay, setLoopA, setLoopB };
   
@@ -462,62 +512,73 @@ export const AudioPlayer: React.FC = () => {
         </div>
 
         {/* Timeline */}
-        <div className="space-y-2 mb-8 select-none">
+        <div className="space-y-3 mb-8 select-none">
             <div className="flex justify-between text-xs font-mono text-slate-400">
-                <span>{formatTimePrecise(state.currentTime)}</span>
+                <span className={isDragging ? 'text-indigo-400 font-bold' : ''}>
+                    {formatTimePrecise(state.currentTime)}
+                </span>
                 <span>{formatTime(state.duration)}</span>
             </div>
-            <div className="relative h-6 group">
-                {/* Loop Background Highlight */}
-                {loop.start !== null && loop.end !== null && (
+            
+            <div 
+                ref={progressBarRef}
+                className="relative h-10 flex items-center cursor-pointer group touch-none"
+                onMouseDown={handleProgressMouseDown}
+                onMouseMove={handleProgressMouseMove}
+                onMouseLeave={handleProgressMouseLeave}
+            >
+                {/* Hover Tooltip */}
+                {hoverInfo && (
                     <div 
-                        className={`absolute top-0 bottom-0 pointer-events-none opacity-20 ${loop.active ? 'bg-indigo-500' : 'bg-slate-500'}`}
-                        style={{
-                            left: `${(loop.start / state.duration) * 100}%`,
-                            width: `${((loop.end - loop.start) / state.duration) * 100}%`
-                        }}
-                    />
+                        className="absolute bottom-full mb-2 bg-slate-800 text-xs px-2 py-1 rounded border border-slate-700 text-white font-mono -translate-x-1/2 pointer-events-none z-50 shadow-xl whitespace-nowrap"
+                        style={{ left: hoverInfo.left }}
+                    >
+                        {formatTimePrecise(hoverInfo.time)}
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 border-r border-b border-slate-700 rotate-45"></div>
+                    </div>
                 )}
-                
-                {/* Loop Markers */}
+
+                {/* Track Rail */}
+                <div className="w-full h-2 bg-slate-800/50 rounded-full relative overflow-hidden border border-slate-700/50 backdrop-blur-sm">
+                    {/* Loop Region Highlight (Inside Rail) */}
+                    {loop.start !== null && loop.end !== null && (
+                        <div 
+                            className={`absolute top-0 bottom-0 ${loop.active ? 'bg-indigo-500/30' : 'bg-slate-500/20'}`}
+                            style={{
+                                left: `${(loop.start / state.duration) * 100}%`,
+                                width: `${((loop.end - loop.start) / state.duration) * 100}%`
+                            }}
+                        />
+                    )}
+
+                    {/* Progress Fill */}
+                    <div 
+                        className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.6)]"
+                        style={{ width: `${(state.currentTime / state.duration) * 100}%` }}
+                    />
+                </div>
+
+                {/* Loop Markers (Floating on top of rail) */}
                 {loop.start !== null && (
                     <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-indigo-400 z-10 pointer-events-none"
+                        className="absolute top-1/2 -translate-y-1/2 h-5 w-px bg-indigo-400 z-10 pointer-events-none group-hover:h-6 transition-all"
                         style={{ left: `${(loop.start / state.duration) * 100}%` }}
                     >
-                        <div className="absolute -top-1 -translate-x-1/2 text-[10px] font-bold text-indigo-400">A</div>
+                        <div className="absolute -top-4 -translate-x-1/2 text-[9px] font-bold text-indigo-300 bg-slate-900/80 px-1 rounded">A</div>
                     </div>
                 )}
                 {loop.end !== null && (
                     <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-indigo-400 z-10 pointer-events-none"
+                        className="absolute top-1/2 -translate-y-1/2 h-5 w-px bg-indigo-400 z-10 pointer-events-none group-hover:h-6 transition-all"
                         style={{ left: `${(loop.end / state.duration) * 100}%` }}
                     >
-                        <div className="absolute -top-1 -translate-x-1/2 text-[10px] font-bold text-indigo-400">B</div>
+                        <div className="absolute -top-4 -translate-x-1/2 text-[9px] font-bold text-indigo-300 bg-slate-900/80 px-1 rounded">B</div>
                     </div>
                 )}
 
-                <input
-                    type="range"
-                    min={0}
-                    max={state.duration || 100}
-                    step={0.01}
-                    value={state.currentTime}
-                    onChange={handleSeek}
-                    className="w-full absolute top-1/2 -translate-y-1/2 z-20 h-4 opacity-0 cursor-pointer"
-                />
-                
-                {/* Visual Progress Bar */}
-                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden absolute top-1/2 -translate-y-1/2 pointer-events-none">
-                    <div 
-                        className="h-full bg-indigo-500 transition-all duration-75"
-                        style={{ width: `${(state.currentTime / state.duration) * 100}%` }}
-                    />
-                </div>
-                
-                {/* Thumb Visual */}
+                {/* Scrubber Thumb */}
                 <div 
-                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md pointer-events-none transition-all duration-75"
+                    className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] border-2 border-indigo-500 transition-all duration-75 pointer-events-none z-20 ${isDragging || hoverInfo ? 'scale-100 opacity-100' : 'scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100'}`}
                     style={{ left: `${(state.currentTime / state.duration) * 100}%`, marginLeft: '-8px' }}
                 />
             </div>

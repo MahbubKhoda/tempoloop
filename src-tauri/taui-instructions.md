@@ -307,3 +307,151 @@ npm run tauri dev
 ---
 
 If you want, you can paste your **package.json** or the output of `dir` and I’ll diagnose it instantly.
+
+---
+
+# Guide to integrating Tauri into your Vite React app and automating the build of a Windows `.exe` using GitHub Actions.
+
+### **Phase 1: Add Tauri to Your Vite App**
+
+1.  **Install Tauri CLI**
+    Open your project terminal and install the Tauri CLI as a dev dependency.
+
+    ```bash
+    npm install --save-dev @tauri-apps/cli @tauri-apps/api
+    ```
+
+2.  **Initialize Tauri**
+    Run the init command to create the `src-tauri` Rust backend folder.
+
+    ```bash
+    npx tauri init
+    ```
+
+      * **App Name:** (Your choice)
+      * **Window Title:** (Your choice)
+      * **Where are your web assets?** Type `../dist`
+      * **Url of your dev server?** Type `http://localhost:5173`
+      * **Frontend dev command?** Type `npm run dev`
+      * **Frontend build command?** Type `npm run build`
+
+3.  **Verify Configuration**
+    Open `src-tauri/tauri.conf.json` and ensure the `build` section looks like this:
+
+    ```json
+    "build": {
+      "beforeDevCommand": "npm run dev",
+      "beforeBuildCommand": "npm run build",
+      "devUrl": "http://localhost:5173",
+      "frontendDist": "../dist"
+    }
+    ```
+
+    *Note: If you are on Tauri v1, `frontendDist` is called `distDir` and `devUrl` is `devPath`.*
+
+4.  **Test Locally**
+    Run this command to start the app in a desktop window:
+
+    ```bash
+    npx tauri dev
+    ```
+
+-----
+
+### **Phase 2: Automate Releases with GitHub Actions**
+
+This workflow will run whenever you push a tag (like `v1.0.0`). It will build the app and upload the `.exe` to a new GitHub Release.
+
+1.  **Create the Workflow File**
+    Create the following directory and file in your project:
+    `.github/workflows/release.yml`
+
+2.  **Paste the Workflow Code**
+    Add the following code to `release.yml`. This uses the official `tauri-action`.
+
+    ```yaml
+    name: Release App
+
+    on:
+      push:
+        tags:
+          - 'v*' # Triggers when you push a tag starting with v (e.g. v1.0.0)
+
+    jobs:
+      create-release:
+        permissions:
+          contents: write
+        strategy:
+          fail-fast: false
+          matrix:
+            platform: [windows-latest] # Add 'macos-latest' or 'ubuntu-latest' for other builds
+
+        runs-on: ${{ matrix.platform }}
+
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+
+          - name: Install Rust
+            uses: dtolnay/rust-toolchain@stable
+
+          - name: Rust cache
+            uses: swatinem/rust-cache@v2
+            with:
+              workspaces: './src-tauri -> target'
+
+          - name: Sync node version and setup cache
+            uses: actions/setup-node@v4
+            with:
+              node-version: 'lts/*'
+              cache: 'npm'
+
+          - name: Install frontend dependencies
+            run: npm install
+
+          - name: Build the app
+            uses: tauri-apps/tauri-action@v0
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            with:
+              tagName: ${{ github.ref_name }}
+              releaseName: 'App v__VERSION__'
+              releaseBody: 'See the assets to download this version and install.'
+              releaseDraft: true
+              prerelease: false
+    ```
+
+-----
+
+### **Phase 3: How to Trigger a Release**
+
+Now you can generate your `.exe` simply by using Git tags.
+
+1.  **Update Version Numbers**
+    Ensure the version in `package.json` and `src-tauri/tauri.conf.json` matches the release you are planning (e.g., `"0.1.0"`).
+
+2.  **Push the Tag**
+    Run these commands in your terminal:
+
+    ```bash
+    git add .
+    git commit -m "chore: release v0.1.0"
+    git push
+
+    # Create and push the tag
+    git tag v0.1.0
+    git push origin v0.1.0
+    ```
+
+3.  **Download Your App**
+
+      * Go to your GitHub repository and click the **"Actions"** tab.
+      * Watch the "Release App" workflow run (it usually takes 10–15 minutes).
+      * Once complete, go to the **"Releases"** tab on the main repo page.
+      * You will see a "Draft" release containing your `setup.exe` and `.msi` files.
+
+### **Troubleshooting Tips**
+
+  * **Workflow Permissions:** If the Action fails with "Resource not accessible", go to your repo **Settings \> Actions \> General**, scroll to **Workflow permissions**, and select **"Read and write permissions"**.
+  * **Bundle Identifier:** If the build fails, verify that `identifier` in `tauri.conf.json` is unique (e.g., `"com.myname.myapp"`).
+
